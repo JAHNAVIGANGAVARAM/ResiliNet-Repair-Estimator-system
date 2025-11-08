@@ -85,6 +85,45 @@ def load_dataset() -> pd.DataFrame:
 
     df["solution_clean"] = df["solution"].str.strip()
     df["solution_clean"] = df["solution_clean"].replace("", "Restart core routers, check ISP peering and DNS.")
+    
+    # Replace generic solutions with cause-specific ones
+    generic_terms = ["investigate root cause", "rights-respecting", "proportionate measures"]
+    
+    def generate_solution_for_cause(row):
+        cause = str(row["cause"]).lower()
+        solution = str(row["solution_clean"]).lower()
+        
+        # Check if solution is generic
+        if any(term in solution for term in generic_terms) or len(solution.split()) <= 6:
+            # Generate cause-specific solution
+            area = "the affected area"
+            if "fiber" in cause or "cable" in cause:
+                return "Repair the damaged fiber cable and reroute traffic via backup paths."
+            elif "power" in cause or "electricity" in cause:
+                return "Restore power sources (generators/UPS) and restart core network nodes."
+            elif "ddos" in cause or "attack" in cause:
+                return "Block attack traffic at the edge and enable DDoS mitigation services."
+            elif "cyber" in cause or "hack" in cause:
+                return "Isolate affected servers, block malicious IPs, and restore from clean backups."
+            elif "maintenance" in cause:
+                return "Complete maintenance procedures and run verification tests."
+            elif "router" in cause or "hardware" in cause:
+                return "Reboot or replace the faulty equipment and verify configurations."
+            elif "government" in cause or "legal" in cause or "court" in cause:
+                return "Coordinate with legal teams and restore services when authorized."
+            elif "protest" in cause or "violence" in cause:
+                return "Apply targeted access controls and keep emergency communications open."
+            elif "subsea" in cause or "submarine" in cause:
+                return "Coordinate with cable operator for subsea repair and route via backup cables."
+            elif "isp" in cause or "peering" in cause:
+                return "Contact ISPs to fix BGP/peering issues and restore routing."
+            else:
+                return "Restart core routers, check ISP peering and DNS, and dispatch engineers if needed."
+        
+        return row["solution_clean"]
+    
+    df["solution_clean"] = df.apply(generate_solution_for_cause, axis=1)
+    print(f"Preprocessed {len(df)} training examples with cause-specific solutions")
 
     return df
 
@@ -129,7 +168,7 @@ def train_and_save_models() -> None:
     duration_pipeline = Pipeline(
         steps=[
             ("preprocessor", build_preprocessor()),
-            ("model", RandomForestRegressor(n_estimators=300, random_state=42, n_jobs=-1)),
+            ("model", RandomForestRegressor(n_estimators=400, max_depth=14, min_samples_leaf=2, random_state=42, n_jobs=-1)),
         ]
     )
 

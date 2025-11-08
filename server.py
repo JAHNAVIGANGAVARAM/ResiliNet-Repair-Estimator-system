@@ -91,6 +91,7 @@ def load_models() -> bool:
 
     try:
         raw_df = load_dataset()
+        logging.info("Dataset loaded with %s rows and columns: %s", raw_df.shape[0], list(raw_df.columns))
         valid_causes = sorted(raw_df["actual_cause"].str.lower().unique().tolist())
 
         if not DURATION_MODEL_PATH.exists() or not SOLUTION_MODEL_PATH.exists():
@@ -98,6 +99,11 @@ def load_models() -> bool:
 
         duration_model = joblib.load(DURATION_MODEL_PATH)
         solution_model = joblib.load(SOLUTION_MODEL_PATH)
+        logging.info(
+            "Models loaded: duration=%s | solution=%s",
+            duration_model.__class__.__name__,
+            solution_model.__class__.__name__,
+        )
 
         if METADATA_PATH.exists():
             model_metadata = json.loads(METADATA_PATH.read_text())
@@ -178,18 +184,23 @@ def filter_dataset(matched_cause: str, country: str = None, region: str = None) 
     subset = raw_df.copy()
     subset["actual_cause_lower"] = subset["actual_cause"].str.lower()
 
-    cause_mask = subset["actual_cause_lower"].str.contains(matched_cause, case=False, na=False)
-    if not cause_mask.any():
-        for token in matched_cause.split():
-            if len(token) > 3:
+    exact_mask = subset["actual_cause_lower"] == matched_cause.lower()
+    if exact_mask.any():
+        subset = subset[exact_mask]
+    else:
+        cause_mask = subset["actual_cause_lower"].str.contains(matched_cause, case=False, na=False)
+        if cause_mask.any():
+            subset = subset[cause_mask]
+        else:
+            tokens = [token for token in matched_cause.split() if len(token) > 3]
+            for token in tokens:
                 token_mask = subset["actual_cause_lower"].str.contains(token, case=False, na=False)
                 if token_mask.any():
-                    cause_mask = token_mask
+                    subset = subset[token_mask]
                     break
-    if cause_mask.any():
-        subset = subset[cause_mask]
-    else:
-        return pd.DataFrame()
+
+    if subset.empty:
+        return subset.drop(columns=["actual_cause_lower"], errors="ignore")
 
     if country:
         subset = subset[subset["country"].str.lower().str.contains(country.lower(), na=False)]
@@ -200,97 +211,268 @@ def filter_dataset(matched_cause: str, country: str = None, region: str = None) 
 
 
 def generate_solution_from_cause(cause: str, region: str = None) -> str:
-    cause_lower = (cause or "").lower()
+    """
+    Rule-based solution generation for network outages.
+    Each cause type gets a unique, actionable solution.
+    """
+    cause_lower = (cause or "").lower().strip()
     area = region if region else "the affected area"
-
-    if "fiber" in cause_lower or "cable" in cause_lower:
-        return f"Repair the damaged fiber cable in {area} and reroute traffic via backup paths."
-    if "power" in cause_lower or "electricity" in cause_lower:
-        return f"Restore power sources (generators/UPS) and restart core network nodes."
-    if "ddos" in cause_lower or "attack" in cause_lower:
-        return f"Block attack traffic at the edge and enable DDoS mitigation services."
-    if "cyber" in cause_lower or "hack" in cause_lower:
-        return f"Isolate affected servers, block malicious IPs, and restore from clean backups."
-    if "maintenance" in cause_lower:
-        return f"Complete maintenance procedures and run verification tests."
-    if "router" in cause_lower or "hardware" in cause_lower:
-        return f"Reboot or replace the faulty equipment and verify configurations."
-    if "government" in cause_lower or "legal" in cause_lower or "court" in cause_lower:
-        return f"Coordinate with legal teams and restore services when authorized."
-    if "protest" in cause_lower or "violence" in cause_lower:
-        return f"Apply targeted access controls and keep emergency communications open."
-    if "subsea" in cause_lower or "submarine" in cause_lower:
-        return f"Coordinate with cable operator for subsea repair and route via backup cables."
-    if "isp" in cause_lower or "peering" in cause_lower:
-        return f"Contact ISPs to fix BGP/peering issues and restore routing."
-    return f"Restart core routers in {area}, check ISP peering and DNS, and dispatch engineers if needed."
+    
+    # Fiber/Cable Related
+    if any(keyword in cause_lower for keyword in ["fiber", "cable cut", "fibre", "optic"]):
+        return f"Dispatch fiber repair crew to {area}. Locate and splice damaged cable segments. Reroute traffic via backup fiber paths and test optical signal strength."
+    
+    # Power/Electricity Related
+    elif any(keyword in cause_lower for keyword in ["power", "electricity", "generator", "ups", "battery"]):
+        return f"Activate backup generators in {area}. Restore primary power feeds. Systematically restart core routers, switches, and transmission equipment in correct sequence."
+    
+    # DDoS/Cyber Attack Related
+    elif any(keyword in cause_lower for keyword in ["ddos", "dos attack", "cyber attack", "flooding"]):
+        return f"Enable DDoS mitigation at edge routers. Implement rate limiting and traffic scrubbing. Block attack source IPs and reroute legitimate traffic through clean pipes."
+    
+    # Malware/Hacking Related
+    elif any(keyword in cause_lower for keyword in ["malware", "virus", "hack", "breach", "intrusion", "ransomware"]):
+        return f"Isolate infected systems immediately. Scan and remove malware. Restore from verified clean backups. Patch vulnerabilities and rotate all credentials."
+    
+    # Hardware Failure
+    elif any(keyword in cause_lower for keyword in ["hardware", "router", "switch", "equipment", "device failure"]):
+        return f"Replace faulty hardware components in {area}. Deploy spare equipment from inventory. Restore configurations from backup and verify routing protocols."
+    
+    # Software/Configuration Issues
+    elif any(keyword in cause_lower for keyword in ["software", "configuration", "upgrade", "patch", "bug"]):
+        return f"Roll back problematic software changes. Restore last known good configuration. Test in isolated environment before redeploying to production."
+    
+    # Maintenance Related
+    elif any(keyword in cause_lower for keyword in ["maintenance", "planned", "scheduled", "upgrade work"]):
+        return f"Complete scheduled maintenance activities in {area}. Perform post-maintenance verification tests. Gradually restore services and monitor performance metrics."
+    
+    # Government/Legal Issues
+    elif any(keyword in cause_lower for keyword in ["government", "legal", "court", "order", "directive", "regulation", "shutdown", "visit"]):
+        return f"Engage legal and compliance teams. Document official directives. Maintain emergency services access. Prepare phased restoration plan pending authorization."
+    
+    # Civil Unrest/Violence
+    elif any(keyword in cause_lower for keyword in ["protest", "riot", "violence", "unrest", "vandalism", "civil"]):
+        return f"Coordinate with security authorities for {area}. Implement geo-fenced access controls. Protect critical infrastructure. Maintain emergency communication channels."
+    
+    # Subsea Cable Issues
+    elif any(keyword in cause_lower for keyword in ["subsea", "submarine", "undersea", "sea cable"]):
+        return f"Alert submarine cable consortium. Dispatch cable repair vessel with ROV equipment. Reroute international traffic via alternate cable systems. Estimate repair timeline based on fault location."
+    
+    # ISP/Peering Issues
+    elif any(keyword in cause_lower for keyword in ["isp", "peering", "bgp", "routing", "upstream", "transit"]):
+        return f"Contact upstream ISPs to resolve routing issues. Verify BGP peering sessions. Correct route advertisements. Clear dampened routes and monitor traffic flow normalization."
+    
+    # Weather Related
+    elif any(keyword in cause_lower for keyword in ["weather", "storm", "flood", "lightning", "rain", "wind", "cyclone", "hurricane"]):
+        return f"Assess weather damage to infrastructure in {area}. Deploy emergency repair teams. Protect equipment from water ingress. Restore power and connectivity to affected sites."
+    
+    # Fire Related
+    elif any(keyword in cause_lower for keyword in ["fire", "burn", "smoke", "heat"]):
+        return f"Coordinate with fire services. Evacuate personnel from {area}. Assess fire damage to network equipment. Replace burned components and restore from offsite backups."
+    
+    # Transmission Issues
+    elif any(keyword in cause_lower for keyword in ["transmission", "backhaul", "microwave", "radio"]):
+        return f"Inspect transmission links in {area}. Realign microwave dishes. Check radio frequencies for interference. Restore backup transmission paths."
+    
+    # DNS/Server Issues
+    elif any(keyword in cause_lower for keyword in ["dns", "server", "database", "application"]):
+        return f"Restart DNS/application servers. Verify database connectivity. Clear cache and test name resolution. Monitor query response times and error rates."
+    
+    # Capacity/Overload Issues
+    elif any(keyword in cause_lower for keyword in ["capacity", "overload", "congestion", "traffic", "bandwidth"]):
+        return f"Implement traffic shaping and QoS policies. Add capacity via additional circuits. Load balance across available paths. Identify and throttle heavy users if needed."
+    
+    # Construction/Excavation
+    elif any(keyword in cause_lower for keyword in ["construction", "excavation", "dig", "road work", "drilling"]):
+        return f"Coordinate with construction crews in {area}. Locate and repair damaged underground cables. Update cable route documentation. Install additional protection measures."
+    
+    # Animal/Environmental
+    elif any(keyword in cause_lower for keyword in ["animal", "rodent", "bird", "nest", "tree"]):
+        return f"Remove animal interference from equipment in {area}. Seal cable entry points. Trim vegetation near antennas. Install protective barriers."
+    
+    # Access/Physical Security
+    elif any(keyword in cause_lower for keyword in ["access", "theft", "vandal", "security", "trespass", "sabotage"]):
+        return f"Secure physical access to network sites in {area}. Replace stolen equipment. Enhance perimeter security. File police reports and insurance claims."
+    
+    # Air/Environmental  
+    elif any(keyword in cause_lower for keyword in ["air", "temperature", "cooling", "hvac", "overheat"]):
+        return f"Restore HVAC/cooling systems in {area}. Monitor equipment temperatures. Add temporary cooling if needed. Ensure proper ventilation."
+    
+    # Default fallback
+    else:
+        return f"Investigate root cause of outage in {area}. Deploy field engineers for on-site diagnostics. Implement appropriate corrective measures based on findings. Monitor restoration progress."
 
 
 def build_recovery_steps(cause: str, severity: str, area: str, solution: str) -> list[str]:
+    """
+    Rule-based recovery timeline generation.
+    Each cause type gets unique 3-step recovery process.
+    """
     area_display = area or "the affected area"
-    cause_lower = (cause or "").lower()
+    cause_lower = (cause or "").lower().strip()
     steps = []
 
-    if "fiber" in cause_lower or "cable" in cause_lower:
+    # Fiber/Cable Related
+    if any(keyword in cause_lower for keyword in ["fiber", "cable cut", "fibre", "optic"]):
         steps = [
-            f"Dispatch field fibre crew to {area_display} and initiate optical span testing.",
+            f"Dispatch field fiber crew to {area_display} and initiate optical span testing.",
             "Splice or replace the damaged segment, then restore traffic via protected rings.",
             "Validate signal levels, update topology maps, and brief stakeholders on resolution.",
         ]
-    elif "power" in cause_lower or "electric" in cause_lower:
+    
+    # Power/Electricity Related
+    elif any(keyword in cause_lower for keyword in ["power", "electric", "generator", "ups", "battery"]):
         steps = [
             f"Coordinate with facilities to restore stable power feeds across {area_display}.",
             "Bring core routers and aggregation layers back online with clean shutdown/startup checks.",
             "Audit UPS/generator runtime logs and schedule preventative maintenance follow-up.",
         ]
-    elif "ddos" in cause_lower or "attack" in cause_lower:
+    
+    # DDoS Attack Related
+    elif any(keyword in cause_lower for keyword in ["ddos", "dos attack", "flooding"]):
         steps = [
             "Enable upstream DDoS scrubbing and block hostile prefixes at the edge.",
             "Rate-limit affected services, reroute trusted traffic, and monitor packet loss.",
             "File incident report, refresh mitigation playbooks, and coordinate with security ops.",
         ]
-    elif "government" in cause_lower or "legal" in cause_lower or "court" in cause_lower:
-        steps = [
-            "Engage legal/compliance teams to clarify scope of imposed restrictions.",
-            "Maintain emergency services routing while preparing staged service restoration.",
-            "Document timeline, notify impacted partners, and track regulatory follow-ups.",
-        ]
-    elif "maintenance" in cause_lower:
-        steps = [
-            "Confirm maintenance window approvals and impacted circuits.",
-            "Execute rollback or remediation tasks and validate service KPIs.",
-            "Publish completion notice, capture lessons, and adjust future change plans.",
-        ]
-    elif "hardware" in cause_lower or "router" in cause_lower or "switch" in cause_lower:
-        steps = [
-            "Swap or reseat failed gear, applying golden configuration from source control.",
-            "Perform end-to-end connectivity tests and re-enable routing adjacencies.",
-            "Schedule root-cause review, log spares usage, and update asset database.",
-        ]
-    elif "cyber" in cause_lower or "malware" in cause_lower or "hack" in cause_lower:
+    
+    # Malware/Hacking Related
+    elif any(keyword in cause_lower for keyword in ["malware", "virus", "hack", "breach", "cyber", "intrusion", "ransomware"]):
         steps = [
             "Isolate compromised hosts, rotate credentials, and enable forensic data capture.",
             "Restore clean images, verify integrity checksums, and rejoin critical services cautiously.",
             "Coordinate post-incident hardening and communicate remediation progress.",
         ]
-    elif "protest" in cause_lower or "violence" in cause_lower or "civil" in cause_lower:
+    
+    # Government/Legal Issues
+    elif any(keyword in cause_lower for keyword in ["government", "legal", "court", "order", "directive", "visit", "shutdown"]):
+        steps = [
+            "Engage legal/compliance teams to clarify scope of imposed restrictions.",
+            "Maintain emergency services routing while preparing staged service restoration.",
+            "Document timeline, notify impacted partners, and track regulatory follow-ups.",
+        ]
+    
+    # Civil Unrest/Violence
+    elif any(keyword in cause_lower for keyword in ["protest", "violence", "riot", "civil", "unrest", "vandalism"]):
         steps = [
             "Activate crisis response channel and establish secure comms with field teams.",
             "Implement geo-fenced controls while sustaining emergency connectivity.",
             "Debrief authorities, reassess risk zones, and plan staged service normalization.",
         ]
-    elif "subsea" in cause_lower or "submarine" in cause_lower:
+    
+    # Subsea Cable Issues
+    elif any(keyword in cause_lower for keyword in ["subsea", "submarine", "undersea", "sea cable"]):
         steps = [
             "Notify cable consortium, dispatch repair vessel, and reroute traffic via alternate paths.",
             "Monitor latency impacts, adjust transit agreements, and keep stakeholders informed.",
             "Review redundancy posture, update capacity models, and log lessons learned.",
         ]
-    elif "isp" in cause_lower or "peering" in cause_lower or "bgp" in cause_lower:
+    
+    # ISP/Peering Issues
+    elif any(keyword in cause_lower for keyword in ["isp", "peering", "bgp", "routing", "upstream", "transit"]):
         steps = [
             "Engage upstream peers to resolve routing anomalies and validate session health.",
             "Propagate corrected route policies, clear dampened prefixes, and confirm traffic stability.",
             "Capture BGP incident report and refine peering automation safeguards.",
         ]
+    
+    # Maintenance Related
+    elif any(keyword in cause_lower for keyword in ["maintenance", "planned", "scheduled", "upgrade work"]):
+        steps = [
+            "Confirm maintenance window approvals and impacted circuits.",
+            "Execute rollback or remediation tasks and validate service KPIs.",
+            "Publish completion notice, capture lessons, and adjust future change plans.",
+        ]
+    
+    # Hardware Failure
+    elif any(keyword in cause_lower for keyword in ["hardware", "router", "switch", "equipment", "device"]):
+        steps = [
+            "Swap or reseat failed gear, applying golden configuration from source control.",
+            "Perform end-to-end connectivity tests and re-enable routing adjacencies.",
+            "Schedule root-cause review, log spares usage, and update asset database.",
+        ]
+    
+    # Software/Configuration Issues
+    elif any(keyword in cause_lower for keyword in ["software", "configuration", "upgrade", "patch", "bug"]):
+        steps = [
+            "Roll back problematic changes and restore last known good configuration.",
+            "Test in isolated lab environment before redeploying to production.",
+            "Document lessons learned and update change management procedures.",
+        ]
+    
+    # Weather Related
+    elif any(keyword in cause_lower for keyword in ["weather", "storm", "flood", "lightning", "rain", "wind", "cyclone"]):
+        steps = [
+            f"Assess weather damage to infrastructure in {area_display} and deploy emergency teams.",
+            "Protect equipment from water ingress, restore power, and repair damaged sites.",
+            "Monitor weather forecasts and prepare contingency plans for ongoing conditions.",
+        ]
+    
+    # Fire Related
+    elif any(keyword in cause_lower for keyword in ["fire", "burn", "smoke", "heat"]):
+        steps = [
+            f"Coordinate with fire services and evacuate personnel from {area_display}.",
+            "Assess fire damage, replace burned equipment, and restore from offsite backups.",
+            "Review fire safety systems and implement enhanced protection measures.",
+        ]
+    
+    # Transmission Issues
+    elif any(keyword in cause_lower for keyword in ["transmission", "backhaul", "microwave", "radio"]):
+        steps = [
+            f"Inspect transmission links in {area_display} and realign microwave dishes.",
+            "Check radio frequencies for interference and restore backup paths.",
+            "Validate signal quality and update link budget calculations.",
+        ]
+    
+    # DNS/Server Issues
+    elif any(keyword in cause_lower for keyword in ["dns", "server", "database", "application"]):
+        steps = [
+            "Restart DNS/application servers and verify database connectivity.",
+            "Clear cache, test name resolution, and monitor query response times.",
+            "Review server logs for errors and implement performance tuning.",
+        ]
+    
+    # Capacity/Overload Issues
+    elif any(keyword in cause_lower for keyword in ["capacity", "overload", "congestion", "traffic", "bandwidth"]):
+        steps = [
+            "Implement traffic shaping and QoS policies to manage congestion.",
+            "Add capacity via additional circuits and load balance across paths.",
+            "Analyze traffic patterns and plan for long-term capacity upgrades.",
+        ]
+    
+    # Construction/Excavation
+    elif any(keyword in cause_lower for keyword in ["construction", "excavation", "dig", "road work", "drilling"]):
+        steps = [
+            f"Coordinate with construction crews in {area_display} and locate damaged cables.",
+            "Repair underground infrastructure and update cable route documentation.",
+            "Install additional protection and warning markers at site.",
+        ]
+    
+    # Animal/Environmental
+    elif any(keyword in cause_lower for keyword in ["animal", "rodent", "bird", "nest", "tree"]):
+        steps = [
+            f"Remove animal interference from equipment in {area_display}.",
+            "Seal cable entry points and trim vegetation near antennas.",
+            "Install protective barriers and schedule regular site inspections.",
+        ]
+    
+    # Access/Physical Security
+    elif any(keyword in cause_lower for keyword in ["access", "theft", "vandal", "security", "trespass", "sabotage"]):
+        steps = [
+            f"Secure physical access to network sites in {area_display}.",
+            "Replace stolen equipment and enhance perimeter security measures.",
+            "File police reports, review security footage, and update access controls.",
+        ]
+    
+    # Air/Cooling Issues
+    elif any(keyword in cause_lower for keyword in ["air", "temperature", "cooling", "hvac", "overheat"]):
+        steps = [
+            f"Restore HVAC/cooling systems in {area_display} immediately.",
+            "Monitor equipment temperatures and add temporary cooling if needed.",
+            "Audit cooling capacity and plan for environmental upgrades.",
+        ]
+    
+    # Default fallback
     else:
         steps = [
             f"Mobilise field operations for {area_display} and gather telemetry for triage.",
@@ -298,11 +480,9 @@ def build_recovery_steps(cause: str, severity: str, area: str, solution: str) ->
             "Document root cause, update runbooks, and schedule resilience follow-ups.",
         ]
 
-    if solution:
-        steps[1] = solution
-
+    # Adjust for severity
     if severity in {"high", "critical"}:
-        steps[0] = f"Activate war-room bridge and dispatch senior responders to {area_display} immediately."
+        steps[0] = f"🚨 URGENT: Activate war-room bridge and dispatch senior responders to {area_display} immediately."
         steps[2] += " Escalate progress updates to leadership every 30 minutes."
 
     return steps
@@ -314,44 +494,58 @@ def predict_outcome(
     user_region: str,
     user_severity: str,
 ) -> dict:
+    """
+    Pure rule-based prediction system.
+    Always generates unique solutions based on cause keywords.
+    Uses dataset only for duration estimation and reference count.
+    """
+    # Step 1: Match cause to known causes
     matched_cause = fuzzy_match(user_cause, valid_causes)
-    model_input = prepare_input_row(matched_cause, user_country, user_region, user_severity)
-
-    predicted_duration = float(duration_model.predict(model_input)[0])
-    predicted_duration = max(predicted_duration, 0.5)
-
-    predicted_solution = solution_model.predict(model_input)[0]
-    if isinstance(predicted_solution, (list, tuple)):
-        predicted_solution = predicted_solution[0]
-    predicted_solution = str(predicted_solution).strip()
-
+    logging.info("User cause '%s' matched to '%s'", user_cause, matched_cause)
+    
+    # Step 2: Get historical data from dataset for duration estimation
     dataset_duration = None
     reference_count = 0
+    context_area = user_region or user_country or "the affected area"
+    
     dataset_slice = filter_dataset(matched_cause, user_country, user_region)
     if not dataset_slice.empty:
         dataset_duration = float(dataset_slice["duration"].median())
-        predicted_duration = (predicted_duration + dataset_duration) / 2.0
-        top_solution = dataset_slice["solution_text"].mode()
-        if not top_solution.empty:
-            predicted_solution = top_solution.iloc[0]
         reference_count = int(dataset_slice.shape[0])
-
-    if not predicted_solution:
-        predicted_solution = generate_solution_from_cause(matched_cause, user_region)
-
+        logging.info("Found %d historical cases in dataset with median duration %.2f days", 
+                    reference_count, dataset_duration)
+    
+    # Step 3: Use ML model for duration prediction (but can be overridden by dataset)
+    model_input = prepare_input_row(matched_cause, user_country, user_region, user_severity)
+    predicted_duration = float(duration_model.predict(model_input)[0])
+    predicted_duration = max(predicted_duration, 0.5)
+    
+    # Blend model prediction with dataset if available
+    if dataset_duration is not None:
+        predicted_duration = (predicted_duration + dataset_duration) / 2.0
+        logging.info("Blended duration: model=%.2f, dataset=%.2f, final=%.2f", 
+                    float(duration_model.predict(model_input)[0]), dataset_duration, predicted_duration)
+    
+    # Step 4: ALWAYS use rule-based solution generation (ignore ML model completely for solution)
+    predicted_solution = generate_solution_from_cause(matched_cause, context_area)
+    logging.info("Generated rule-based solution: '%s'", predicted_solution[:100])
+    
+    # Step 5: Determine severity
     severity_label = (user_severity or derive_severity_label(predicted_duration) or "medium").lower()
-    context_area = user_region or user_country or "the affected area"
-
+    
+    # Step 6: Generate recovery timeline steps
+    base_steps = build_recovery_steps(matched_cause, severity_label, context_area, predicted_solution)
+    logging.info("Generated recovery steps: %s", [s[:60] + "..." if len(s) > 60 else s for s in base_steps])
+    
+    # Step 7: Calculate timeline progress and ETA
     progress_lookup = {"low": 32, "medium": 52, "high": 72, "critical": 88}
     timeline_progress = progress_lookup.get(severity_label, 52)
-
-    base_steps = build_recovery_steps(matched_cause, severity_label, context_area, predicted_solution)
-
+    
     eta_days = max(1, int(round(predicted_duration)))
     eta_label = f"Target: {eta_days}d window"
 
     logging.info(
-        "Prediction ready | cause=%s | duration=%.2f | severity=%s | references=%s",
+        "✅ Prediction complete | cause=%s | duration=%.2f | severity=%s | references=%d",
         matched_cause,
         predicted_duration,
         severity_label,
