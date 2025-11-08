@@ -5,7 +5,7 @@ AI-assisted web app that predicts repair timelines and suggests next actions for
 ## Contents
 
 ```
-j/
+ResiliNet-Repair-Estimator-system/
 ├── server.py                          # Flask application (serves UI + /predict API)
 ├── train_models.py                    # Deterministic training pipeline
 ├── requirements.txt                   # Runtime dependencies
@@ -44,17 +44,6 @@ j/
 	```
 	Visit `http://localhost:5000` and submit incident details to see predictions. The UI supports a demo scenario button if you want to preview behaviour quickly.
 
-## Deploying to Render
-
-1. Train locally and ensure `models/` contains the fresh `.joblib` files and `model_metadata.json` you want in production.
-2. Review `requirements.txt`; keep only the packages you need at runtime (training-only extras can move to a secondary file if desired).
-3. Commit the project (including the `models/` directory and dataset if you plan to load it at runtime) and push to GitHub/GitLab/Bitbucket.
-4. On [render.com](https://render.com):
-	- **New > Web Service**, connect the repo.
-	- Runtime: Python 3.x, build command auto-detected from `requirements.txt`.
-	- Start command: leave blank (Render reads `Procfile`) or set `gunicorn server:app` explicitly.
-	- Add any environment variables; the app respects `PORT` automatically and enables debug only when `FLASK_DEBUG=1`.
-5. Deploy and watch the logs. Once Render reports “Live,” open the service URL, confirm the homepage loads, and send a test request.
 
 ## API
 
