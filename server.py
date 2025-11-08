@@ -300,14 +300,6 @@ def predict_outcome(
         "eta_label": eta_label,
     }
 
-@app.before_first_request
-def _preload_models():
-    if ensure_models_loaded():
-        logging.info("Model assets ready before first request")
-    else:
-        logging.error("Unable to load models during startup; will retry on demand")
-
-
 @app.route('/')
 def home():
     ensure_models_loaded()
