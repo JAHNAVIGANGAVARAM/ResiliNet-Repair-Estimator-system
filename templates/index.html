@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Internet Shutdown Prediction</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="surface-gradient" aria-hidden="true"></div>
+    <div class="app-shell">
+        <header class="top-bar" aria-label="Product navigation">
+            <div class="top-bar__brand">
+                <span class="brand-mark" aria-hidden="true">R</span>
+                <div>
+                    <span class="brand-title">ResiliNet Control</span>
+                    <span class="brand-subtitle">Incident Response Copilot</span>
+                </div>
+            </div>
+            <div class="top-bar__status">
+                <span class="status-dot" aria-hidden="true"></span>
+                <span>Models healthy</span>
+            </div>
+        </header>
+
+        <section class="hero" aria-labelledby="hero-title">
+            <div class="hero__content">
+                <div class="hero__text">
+                    <div class="hero__badge">AI-Assisted Insights</div>
+                    <h1 id="hero-title">ResiliNet Repair Estimator</h1>
+                    <p>Forecast repair timelines, surface probable root causes, and receive next-step guidance within seconds of an outage report.</p>
+                    <div class="hero__actions">
+                        <button type="button" class="ghost-btn" data-action="demo">Play sample scenario</button>
+                        <div class="hero__note">
+                            <span class="hero__note-label">Realtime-ready</span>
+                            <span>Designed to plug into your telemetry feeds.</span>
+                        </div>
+                    </div>
+                </div>
+                <dl class="hero__stats" aria-label="Snapshot of model coverage">
+                    <div>
+                        <dt>Historical incidents</dt>
+                        <dd>4.3k+</dd>
+                    </div>
+                    <div>
+                        <dt>Regions tracked</dt>
+                        <dd>62</dd>
+                    </div>
+                    <div>
+                        <dt>Median inference</dt>
+                        <dd>540&nbsp;ms</dd>
+                    </div>
+                </dl>
+            </div>
+        </section>
+
+        <main class="content-grid">
+            <section class="card form-card" aria-labelledby="form-title">
+                <div class="card__header">
+                    <h2 id="form-title">Incident Details</h2>
+                    <p>Describe the outage to generate a tailored recovery plan.</p>
+                </div>
+                <form id="prediction-form" novalidate>
+                    <div class="field-group">
+                        <label for="cause">Cause of Shutdown*</label>
+                        <input type="text" id="cause" name="cause" placeholder="e.g., fiber cut" required>
+                        <span class="field-hint">Accepted: Fiber cuts, DDoS, power outage, legal orders, etc.</span>
+                    </div>
+
+                    <div class="field-row">
+                        <div class="field-group">
+                            <label for="country">Country</label>
+                            <input type="text" id="country" name="country" placeholder="e.g., USA">
+                        </div>
+                        <div class="field-group">
+                            <label for="region">Region</label>
+                            <input type="text" id="region" name="region" placeholder="e.g., California">
+                        </div>
+                    </div>
+
+                    <div class="field-group">
+                        <label for="severity">Severity</label>
+                        <div class="select-wrapper">
+                            <select id="severity" name="severity">
+                                <option value="">Select severity</option>
+                                <option value="low">Low</option>
+                                <option value="medium">Medium</option>
+                                <option value="high">High</option>
+                                <option value="critical">Critical</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <button type="submit" class="primary-btn" data-role="submit">
+                        <span class="btn-spinner" aria-hidden="true"></span>
+                        <span class="btn-label">Predict Recovery Path</span>
+                    </button>
+                </form>
+
+                <dl class="status-summary" aria-label="Model snapshot">
+                    <div>
+                        <dt>Model Version</dt>
+                        <dd>v1.0 • RandomForest</dd>
+                    </div>
+                    <div>
+                        <dt>Last Trained</dt>
+                        <dd>Nov 2025</dd>
+                    </div>
+                    <div>
+                        <dt>Avg MAE</dt>
+                        <dd>≈ 84 days</dd>
+                    </div>
+                    <div>
+                        <dt>Reference incidents</dt>
+                        <dd data-result="reference-count">—</dd>
+                    </div>
+                </dl>
+            </section>
+
+            <section class="card results-card" id="results-card" aria-live="polite" aria-labelledby="results-title">
+                <div class="card__header">
+                    <h2 id="results-title">Recommended Response</h2>
+                    <span class="severity-chip" data-result="severity">Awaiting input</span>
+                </div>
+                <p class="card__meta">Closest historical match: <span class="card__meta-value" data-result="matched-cause">—</span></p>
+
+                <div class="insight-grid">
+                    <div class="insight">
+                        <h3>Estimated Repair Duration</h3>
+                        <p class="insight__value" data-result="duration">—</p>
+                        <p class="insight__meta">Blended with historical median of <span data-result="reference-median">—</span>.</p>
+                    </div>
+
+                    <div class="insight">
+                        <h3>Recommended Action</h3>
+                        <p class="insight__value" data-result="solution">Provide incident details to generate a plan.</p>
+                    </div>
+                </div>
+
+                <div class="timeline-card" aria-describedby="timeline-label">
+                    <div class="timeline__header">
+                        <span id="timeline-label">Recovery momentum</span>
+                        <span class="timeline__eta" data-result="eta">Awaiting input</span>
+                    </div>
+                    <div class="timeline" id="timeline">
+                        <div class="timeline__bar"></div>
+                        <div class="timeline__marker" data-stage="30"></div>
+                        <div class="timeline__marker" data-stage="60"></div>
+                        <div class="timeline__marker" data-stage="90"></div>
+                    </div>
+                    <ol class="timeline__steps">
+                        <li data-step="1"><strong>Mobilise crew</strong><span data-result="step1">Provide incident details to generate a plan.</span></li>
+                       <li data-step="2"><strong>Restore service</strong><span data-result="step2">—</span></li>
+                        <li data-step="3"><strong>Post-mortem</strong><span data-result="step3">—</span></li>
+                    </ol>
+                </div>
+
+                <footer class="card__footer">
+                    <p class="disclaimer">Use these recommendations to supplement, not replace, on-the-ground assessments. Re-train with fresh datasets for improved accuracy.</p>
+                </footer>
+            </section>
+
+            <aside class="card info-card" aria-labelledby="insights-title">
+                <h2 id="insights-title">Operational Tips</h2>
+                <ul>
+                    <li>Confirm severity with NOC telemetry to prioritise engineering crews.</li>
+                    <li>Use the recommended action to brief stakeholders and coordinate vendors.</li>
+                    <li>Re-train the model after major regional incidents to capture evolving patterns.</li>
+                </ul>
+
+                <div class="info-card__cta">
+                    <p>Need richer analytics? Integrate additional network KPIs and legal context for higher fidelity.</p>
+                </div>
+            </aside>
+        </main>
+    </div>
+
+    <div class="toast" id="toast" role="alert" aria-live="assertive"></div>
+
+    <script src="/static/script.js"></script>
+</body>
+</html>

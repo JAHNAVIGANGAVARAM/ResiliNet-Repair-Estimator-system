@@ -1,0 +1,18 @@
+# Required Python libraries for the project
+pandas
+numpy
+openpyxl
+xgboost
+lightgbm
+catboost
+shap
+rapidfuzz
+scikit-learn
+matplotlib
+seaborn
+optuna
+joblib
+plotly
+Flask
+flask-cors
+gunicorn

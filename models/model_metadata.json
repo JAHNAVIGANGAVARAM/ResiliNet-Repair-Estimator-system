@@ -1,0 +1,22 @@
+{
+  "feature_columns": [
+    "cause_input",
+    "country_input",
+    "region_input",
+    "severity_input"
+  ],
+  "valid_causes": [
+    "communal violence",
+    "conflict",
+    "elections",
+    "exam cheating",
+    "information control",
+    "other",
+    "political instability",
+    "protests",
+    "religious holiday/anniversary",
+    "unknown",
+    "visits by government officials"
+  ],
+  "training_rows": 1195
+}
