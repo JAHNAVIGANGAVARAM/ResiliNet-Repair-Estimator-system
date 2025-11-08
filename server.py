@@ -226,6 +226,88 @@ def generate_solution_from_cause(cause: str, region: str = None) -> str:
     return f"Restart core routers in {area}, check ISP peering and DNS, and dispatch engineers if needed."
 
 
+def build_recovery_steps(cause: str, severity: str, area: str, solution: str) -> list[str]:
+    area_display = area or "the affected area"
+    cause_lower = (cause or "").lower()
+    steps = []
+
+    if "fiber" in cause_lower or "cable" in cause_lower:
+        steps = [
+            f"Dispatch field fibre crew to {area_display} and initiate optical span testing.",
+            "Splice or replace the damaged segment, then restore traffic via protected rings.",
+            "Validate signal levels, update topology maps, and brief stakeholders on resolution.",
+        ]
+    elif "power" in cause_lower or "electric" in cause_lower:
+        steps = [
+            f"Coordinate with facilities to restore stable power feeds across {area_display}.",
+            "Bring core routers and aggregation layers back online with clean shutdown/startup checks.",
+            "Audit UPS/generator runtime logs and schedule preventative maintenance follow-up.",
+        ]
+    elif "ddos" in cause_lower or "attack" in cause_lower:
+        steps = [
+            "Enable upstream DDoS scrubbing and block hostile prefixes at the edge.",
+            "Rate-limit affected services, reroute trusted traffic, and monitor packet loss.",
+            "File incident report, refresh mitigation playbooks, and coordinate with security ops.",
+        ]
+    elif "government" in cause_lower or "legal" in cause_lower or "court" in cause_lower:
+        steps = [
+            "Engage legal/compliance teams to clarify scope of imposed restrictions.",
+            "Maintain emergency services routing while preparing staged service restoration.",
+            "Document timeline, notify impacted partners, and track regulatory follow-ups.",
+        ]
+    elif "maintenance" in cause_lower:
+        steps = [
+            "Confirm maintenance window approvals and impacted circuits.",
+            "Execute rollback or remediation tasks and validate service KPIs.",
+            "Publish completion notice, capture lessons, and adjust future change plans.",
+        ]
+    elif "hardware" in cause_lower or "router" in cause_lower or "switch" in cause_lower:
+        steps = [
+            "Swap or reseat failed gear, applying golden configuration from source control.",
+            "Perform end-to-end connectivity tests and re-enable routing adjacencies.",
+            "Schedule root-cause review, log spares usage, and update asset database.",
+        ]
+    elif "cyber" in cause_lower or "malware" in cause_lower or "hack" in cause_lower:
+        steps = [
+            "Isolate compromised hosts, rotate credentials, and enable forensic data capture.",
+            "Restore clean images, verify integrity checksums, and rejoin critical services cautiously.",
+            "Coordinate post-incident hardening and communicate remediation progress.",
+        ]
+    elif "protest" in cause_lower or "violence" in cause_lower or "civil" in cause_lower:
+        steps = [
+            "Activate crisis response channel and establish secure comms with field teams.",
+            "Implement geo-fenced controls while sustaining emergency connectivity.",
+            "Debrief authorities, reassess risk zones, and plan staged service normalization.",
+        ]
+    elif "subsea" in cause_lower or "submarine" in cause_lower:
+        steps = [
+            "Notify cable consortium, dispatch repair vessel, and reroute traffic via alternate paths.",
+            "Monitor latency impacts, adjust transit agreements, and keep stakeholders informed.",
+            "Review redundancy posture, update capacity models, and log lessons learned.",
+        ]
+    elif "isp" in cause_lower or "peering" in cause_lower or "bgp" in cause_lower:
+        steps = [
+            "Engage upstream peers to resolve routing anomalies and validate session health.",
+            "Propagate corrected route policies, clear dampened prefixes, and confirm traffic stability.",
+            "Capture BGP incident report and refine peering automation safeguards.",
+        ]
+    else:
+        steps = [
+            f"Mobilise field operations for {area_display} and gather telemetry for triage.",
+            "Apply recommended fix, monitor recovery KPIs, and keep customer comms active.",
+            "Document root cause, update runbooks, and schedule resilience follow-ups.",
+        ]
+
+    if solution:
+        steps[1] = solution
+
+    if severity in {"high", "critical"}:
+        steps[0] = f"Activate war-room bridge and dispatch senior responders to {area_display} immediately."
+        steps[2] += " Escalate progress updates to leadership every 30 minutes."
+
+    return steps
+
+
 def predict_outcome(
     user_cause: str,
     user_country: str,
@@ -263,19 +345,7 @@ def predict_outcome(
     progress_lookup = {"low": 32, "medium": 52, "high": 72, "critical": 88}
     timeline_progress = progress_lookup.get(severity_label, 52)
 
-    base_steps = [
-        f"Mobilise field operations for {context_area} and share the incident brief with the NOC.",
-        "Restore primary links, validate traffic health, and keep customer comms flowing.",
-        "Run post-incident review, document lessons, and schedule hardening tasks.",
-    ]
-
-    if severity_label in {"high", "critical"}:
-        base_steps[0] = f"Activate crisis bridge and dispatch senior responders to {context_area} within 30 minutes."
-        base_steps[1] = "Coordinate multi-region reroutes, verify latency, and confirm regulatory updates."
-        base_steps[2] = "Publish executive summary, capture RCA, and update resilience playbooks."
-    elif severity_label == "low":
-        base_steps[0] = f"Notify on-call engineer covering {context_area} and collect supporting telemetry."
-        base_steps[1] = "Roll out targeted fix, monitor recovery KPIs, and update stakeholders hourly."
+    base_steps = build_recovery_steps(matched_cause, severity_label, context_area, predicted_solution)
 
     eta_days = max(1, int(round(predicted_duration)))
     eta_label = f"Target: {eta_days}d window"
